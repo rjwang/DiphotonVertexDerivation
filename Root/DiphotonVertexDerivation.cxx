@@ -3,6 +3,38 @@
 #include <EventLoop/Worker.h>
 #include <DiphotonVertexDerivation/DiphotonVertexDerivation.h>
 
+
+// ASG status code check
+#include <AsgTools/MessageCheck.h>
+
+#include <TSystem.h>
+
+
+#include "xAODRootAccess/Init.h"
+#include "xAODRootAccess/TEvent.h"
+
+// EDM includes:
+#include "xAODEventInfo/EventInfo.h"
+#include "xAODJet/JetContainer.h"
+
+#include "xAODMuon/MuonContainer.h"
+#include "PATInterfaces/CorrectionCode.h" // to check the return correction code status of tools
+#include "xAODCore/ShallowAuxContainer.h"
+#include "xAODCore/ShallowCopy.h"
+
+
+// header files for systematics:
+#include "PATInterfaces/SystematicVariation.h"
+#include "PATInterfaces/SystematicsUtil.h"
+
+
+#include <TFile.h>
+
+
+#include "EventLoop/OutputStream.h"
+
+
+
 // this is needed to distribute the algorithm to the workers
 ClassImp(DiphotonVertexDerivation)
 
@@ -29,6 +61,19 @@ EL::StatusCode DiphotonVertexDerivation :: setupJob (EL::Job& job)
   // sole advantage of putting it here is that it gets automatically
   // activated/deactivated when you add/remove the algorithm from your
   // job, which may or may not be of value to you.
+
+
+    // let's initialize the algorithm to use the xAODRootAccess package
+    job.useXAOD ();
+    //xAOD::Init(); // call before opening first file
+    ANA_CHECK_SET_TYPE (EL::StatusCode);
+    ANA_CHECK(xAOD::Init());
+
+// tell EventLoop about our output xAOD:
+    EL::OutputStream out ("outputLabel", "xAOD");
+    job.outputAdd (out);
+
+
   return EL::StatusCode::SUCCESS;
 }
 
@@ -74,6 +119,15 @@ EL::StatusCode DiphotonVertexDerivation :: initialize ()
   // doesn't get called if no events are processed.  So any objects
   // you create here won't be available in the output if you have no
   // input events.
+  ANA_CHECK_SET_TYPE (EL::StatusCode);
+
+  xAOD::TEvent* event = wk()->xaodEvent(); // you should have already added this as described before
+
+// output xAOD
+    TFile *file = wk()->getOutputFile ("outputLabel");
+    ANA_CHECK(event->writeTo(file));
+
+
   return EL::StatusCode::SUCCESS;
 }
 
@@ -85,6 +139,19 @@ EL::StatusCode DiphotonVertexDerivation :: execute ()
   // events, e.g. read input variables, apply cuts, and fill
   // histograms and trees.  This is where most of your actual analysis
   // code will go.
+  ANA_CHECK_SET_TYPE (EL::StatusCode);
+
+  xAOD::TEvent* event = wk()->xaodEvent(); // you should have already added this as described before
+
+
+// copy full container(s) to new xAOD
+// without modifying the contents of it:
+ANA_CHECK(event->copy("AntiKt4EMTopoJets"));
+
+
+   // Save the event:
+   event->fill();
+
   return EL::StatusCode::SUCCESS;
 }
 
@@ -111,6 +178,17 @@ EL::StatusCode DiphotonVertexDerivation :: finalize ()
   // submission node after all your histogram outputs have been
   // merged.  This is different from histFinalize() in that it only
   // gets called on worker nodes that processed input events.
+
+  ANA_CHECK_SET_TYPE (EL::StatusCode);
+
+
+  xAOD::TEvent* event = wk()->xaodEvent(); // you should have already added this as described before
+
+// finalize and close our output xAOD file:
+TFile *file = wk()->getOutputFile ("outputLabel");
+ANA_CHECK(event->finishWritingTo( file ));
+
+
   return EL::StatusCode::SUCCESS;
 }
 
